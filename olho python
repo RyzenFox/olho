@@ -1,96 +1,112 @@
+import threading
+import pygame
+import speech_recognition as sr
+import azure.cognitiveservices.speech as speechsdk
+import openai
+import os
+import random
+import time
+import keyboard
+import io
+import wave
+import subprocess
+import pygetwindow as gw
 import cv2
 import torch
 from PIL import Image
 import pyautogui
-import threading
 
-# Definir a função que executa o código da webcam
-def webcam():
-  # Model
-  model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)  # for PIL/cv2/np inputs and NMS
 
-  # Webcam
-  cap = cv2.VideoCapture(0)
 
-  # Criar uma janela redimensionável
-  cv2.namedWindow('YOLOv5', cv2.WINDOW_NORMAL)
 
-  # Definir o modo de tela cheia
-  cv2.setWindowProperty('YOLOv5', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+def yolo_thread():
 
-  # Obter a largura e a altura da tela
-  screen_width, screen_height = pyautogui.size()
+    # Model
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)  # for PIL/cv2/np inputs and NMS
 
-  # Calcular o centro da tela
-  screen_center_x = screen_width / 2
-  screen_center_y = screen_height / 2
+    # Webcam
+    cap = cv2.VideoCapture(0)
 
-  # Mover o mouse para o centro da tela
-  pyautogui.moveTo(screen_center_x, screen_center_y)
+    # Criar uma janela redimensionável
+    cv2.namedWindow('YOLOv5', cv2.WINDOW_NORMAL)
 
-  # Loop
-  while True:
-    # Ler um frame da webcam
-    ret, frame = cap.read()
+    # Definir o modo de tela cheia
+    cv2.setWindowProperty('YOLOv5', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-    # Converter a imagem de BGR para RGB
-    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # Obter a largura e a altura da tela
+    screen_width, screen_height = pyautogui.size()
 
-    # Redimensionar a imagem da webcam para o mesmo tamanho da tela
-    img = cv2.resize(img, (screen_width, screen_height))
+    # Calcular o centro da tela
+    screen_center_x = screen_width / 2
+    screen_center_y = screen_height / 2
 
-    # Fazer inferência com o modelo
-    results = model(img)
+    # Mover o mouse para o centro da tela
+    pyautogui.moveTo(screen_center_x, screen_center_y)
 
-    # Mover o mouse para o centro do retângulo mais próximo
-    # Obter as coordenadas dos retângulos de detecção
-    boxes = results.xyxy[0]
+    # Loop
+    while True:
+        # Ler um frame da webcam
+        ret, frame = cap.read()
 
-    # Obter os nomes das classes das detecções
-    names = results.names
+        # Converter a imagem de BGR para RGB
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    # Tentar encontrar o retângulo de detecção mais próximo do centro da tela
-    try:
-      # Usar a função min com uma função lambda que calcula a distância entre o centro do retângulo e o centro da tela
-      closest_box = min(boxes, key=lambda box: ((box[0] + box[2]) / 2 - screen_center_x) ** 2 + ((box[1] + box[3]) / 2 - screen_center_y) ** 2)
+        # Redimensionar a imagem da webcam para o mesmo tamanho da tela
+        img = cv2.resize(img, (screen_width, screen_height))
 
-      # Obter as coordenadas do canto superior esquerdo e do canto inferior direito do retângulo mais próximo
-      x1, y1, x2, y2, conf, cls = closest_box
+        # Fazer inferência com o modelo
+        results = model(img)
 
-      # Calcular o centro do retângulo mais próximo
-      box_center_x = (x1 + x2) / 2
-      box_center_y = (y1 + y2) / 2
+        # Mover o mouse para o centro do retângulo mais próximo
+        # Obter as coordenadas dos retângulos de detecção
+        boxes = results.xyxy[0]
 
-      # Mover o mouse para o centro do retângulo mais próximo
-      pyautogui.moveTo(box_center_x, box_center_y)
+        # Obter os nomes das classes das detecções
+        names = results.namesc
 
-      # Obter o nome da classe da detecção mais próxima
-      name = names[int(cls)]
+        # Tentar encontrar o retângulo de detecção mais próximo do centro da tela
+        try:
+            # Usar a função min com uma função lambda que calcula a distância entre o centro do retângulo e o centro da tela
+            closest_box = min(boxes, key=lambda box: ((box[0] + box[2]) / 2 - screen_center_x) ** 2 + ((box[1] + box[3]) / 2 - screen_center_y) ** 2)
 
-      # Imprimir o nome da classe na tela
-      print(f"Mouse moved to {name}")
+            # Obter as coordenadas do canto superior esquerdo e do canto inferior direito do retângulo mais próximo
+            x1, y1, x2, y2, conf, cls = closest_box
 
-    # Se não houver nenhuma detecção, imprimir uma mensagem de erro
-    except ValueError:
-      print("No detection found")
+            # Calcular o centro do retângulo mais próximo
+            box_center_x = (x1 + x2) / 2
+            box_center_y = (y1 + y2) / 2
 
-    # Renderizar os resultados na imagem
-    img = results.render()[0]
+            # Mover o mouse para o centro do retângulo mais próximo
+            pyautogui.moveTo(box_center_x, box_center_y)
 
-    # Mostrar a imagem na janela
-    cv2.imshow('YOLOv5', img)
+            # Obter o nome da classe da detecção mais próxima
+            name = names[int(cls)]
 
-    # Esperar pela tecla ESC para sair do loop
-    if cv2.waitKey(1) == 27:
-      break
+            # Imprimir o nome da classe na tela
+            print(f"Mouse moved to {name}")
 
-  # Liberar os recursos da webcam e fechar as janelas
-  cap.release()
-  cv2.destroyAllWindows()
+        # Se não houver nenhuma detecção, imprimir uma mensagem de erro
+        except ValueError:
+            print("No detection found")
 
-# Definir a função que executa o código do pygame 
-def pygame():
+        # Renderizar os resultados na imagem
+        img = results.render()[0]
 
+        # Mostrar a imagem na janela
+        cv2.imshow('YOLOv5', img)
+
+        # Esperar pela tecla ESC para sair do loop
+        if cv2.waitKey(1) == 27:
+            break
+
+    # Liberar os recursos da webcam e fechar as janelas
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+
+# Função que será executada na thread do jogoccccc
+def game_thread():
     # Inicializar pygame
     pygame.init()
 
@@ -269,12 +285,414 @@ def pygame():
 
 
 
-# Criar uma thread que executa a função webcam
-webcam_thread = threading.Thread(target=webcam, name='webcam_thread')
 
-# Criar uma thread que executa a função pygame 
-pygame_thread = threading.Thread(target=pygame, name='pygame_thread')
 
-# Iniciar as threads 
-webcam_thread.start()
-pygame_thread.start()
+    # Função para salvar o áudio sintetizado em um arquivo
+    def salvar_audio_sintetizado(filename, audio_data):
+        with open(filename, 'wb') as file:
+            file.write(audio_data)
+
+
+
+
+# Função que será executada na thread do chatbot
+chatbot_name = "Biel"
+
+
+
+
+directory = r"C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\audios"
+
+
+
+
+def chatbot_thread():
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # Substitua por sua própria chave de assinatura e região de serviço
+    speech_key, service_region = "b339aed4191a4f9d87898bcf8b548c0f", "brazilsouth"
+
+
+
+
+
+
+
+
+    # Crie uma instância de uma configuração de fala com chave de assinatura e região de serviço especificadas.
+    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
+
+
+
+
+
+
+
+
+    # Defina a voz do sintetizador de voz
+    speech_config.speech_synthesis_voice_name = 'pt-BR-LeticiaNeural'
+
+
+
+
+
+
+
+
+    # Initialize the API key
+    openai.api_key = "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"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def gerar_resposta(messages):
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=150,
+            temperature=1.5
+        )
+        return [response.choices[0].message.content, response.usage]
+
+
+
+
+
+
+
+
+    def ouvir_microfone():
+        r = sr.Recognizer()
+        with sr.Microphone() as source:
+            print("Diga alguma coisa...")
+            r.adjust_for_ambient_noise(source)  # ajuste de ruído do microfone
+            audio = r.listen(source)  # escuta o microfone
+        try:
+            print("Você disse: " + r.recognize_google(audio, language='pt-BR'))
+            return r.recognize_google(audio, language='pt-BR')
+        except sr.UnknownValueError:
+            print("Não entendi o que você disse")
+        # Pressione a tecla "c" antes de falar
+            keyboard.press_and_release('c')
+           
+            text = "Não entendi o que você disse. Poderia repetir novamente?"
+
+
+
+
+
+
+
+
+            # Use SSML para ajustar o tom de voz
+            ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
+
+
+
+
+
+
+
+
+            speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
+            result = speech_synthesizer.speak_ssml_async(ssml).get()
+                # Simule o pressionamento da tecla "c" usando o PyAutoGUI
+            keyboard.press_and_release('c')
+       
+        except sr.RequestError as e:
+            print("Não foi possível obter resultados; {0}".format(e))
+        return ouvir_microfone()  # Chama a função novamente se ocorreu um erro
+
+
+
+
+
+
+
+
+    mensagens = [{"role": "system", "content": "Você é um assistente gente boa."}]
+
+
+
+
+
+
+
+
+    while True:
+        # Ask a question
+        question = ouvir_microfone()
+
+
+
+
+
+
+
+
+        if question == "sair" or question == "":
+            print("saindo")
+            # Pressione a tecla "c" antes de falar
+            keyboard.press_and_release('c')
+           
+            text = "OK. Irei me desativar agora"
+
+
+
+
+
+
+
+
+            # Use SSML para ajustar o tom de voz
+            ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
+
+
+
+
+
+
+
+
+            speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
+            result = speech_synthesizer.speak_ssml_async(ssml).get()
+                # Simule o pressionamento da tecla "c" usando o PyAutoGUI
+            keyboard.press_and_release('c')
+           
+            break
+       
+        else:
+            # Verificar se existe um arquivo de áudio correspondente à pergunta
+            clean_question = "".join(c if c.isalnum() else "_" for c in question)
+            audio_file = os.path.join(directory, f"{clean_question}.wav")
+
+
+            if os.path.exists(audio_file):
+                # Pressione a tecla "c" antes de falar
+                keyboard.press_and_release('c')
+
+
+                pygame.mixer.music.load(audio_file)  # Carregar o arquivo de áudio
+                pygame.mixer.music.play()  # Reproduzir o áudio
+
+
+                # Aguardar a reprodução do áudio terminar
+                while pygame.mixer.music.get_busy():
+                    time.sleep(0.1)
+
+
+                # Pressione a tecla "c" após o áudio terminar
+                keyboard.press_and_release('c')
+           
+            else:
+                mensagens.append({"role": "user", "content": str(question)})
+
+
+
+
+
+
+
+
+                text = ""
+                if "qual é o seu nome" in question.lower() or "seu nome" in question.lower():
+                    print("Pergunta:", question.lower())
+                    print("Perguntou meu nome!")
+                    mensagens.append({"role": "assistant", "content": f"Meu nome é Gabriel Junior. Mas pode me chamar de {chatbot_name}"})
+                    text = f"Meu nome é Gabrielzinho. Mas pode me chamar de {chatbot_name}"
+
+
+
+
+
+
+
+
+                    # Pressione a tecla "c" antes de falar
+                    keyboard.press_and_release('c')
+
+
+
+
+
+
+
+
+                    # Use SSML para ajustar o tom de voz
+                    ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
+
+
+
+
+
+
+
+
+                    speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
+                    result = speech_synthesizer.speak_ssml_async(ssml).get()
+
+
+
+
+
+
+
+
+                    # Simule o pressionamento da tecla "c" usando o PyAutoGUI
+                    keyboard.press_and_release('c')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                else:
+                    answer = gerar_resposta(mensagens)
+                    print("Nóis:", question)
+                    print("ChatGPT:", answer[0], "\nCusto:\n", answer[1])
+                    mensagens.append({"role": "assistant", "content": answer[0]})
+                    text = answer[0]
+   
+                    # Limpar o texto para usar como nome do arquivo
+                    clean_text = "".join(c if c.isalnum() else "_" for c in question)
+                    filename = os.path.join(directory, f"{clean_text}.wav")
+
+
+
+
+                    # Pressione a tecla "c" antes de falar
+                    keyboard.press_and_release('c')
+
+
+
+
+                    # Use SSML para ajustar o tom de voz
+                    ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
+
+
+
+
+                    speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
+                    result = speech_synthesizer.speak_ssml_async(ssml).get()
+                    audio_data = result.audio_data
+
+
+
+
+                    # Salvar o áudio com o nome do texto captado em um diretório específico
+                    with wave.open(filename, 'wb') as wave_file:
+                        wave_file.setnchannels(1)
+                        wave_file.setsampwidth(2)
+                        wave_file.setframerate(16000)
+                        wave_file.writeframes(audio_data)
+
+
+
+
+                        print(f"Áudio salvo como '{filename}'")
+
+
+
+
+                        # Simule o pressionamento da tecla "c" usando o PyAutoGUI
+                        keyboard.press_and_release('c')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            debugar = False
+            if debugar:
+                print("Mensagens", mensagens, type(mensagens))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Cria as threads
+game = threading.Thread(target=game_thread)
+chatbot = threading.Thread(target=chatbot_thread)
+yolo = threading.Thread(target=yolo_thread)
+
+
+
+
+
+
+
+
+# Inicia as threads
+game.start()
+chatbot.start()
+yolo.start()
+
+
+
+
+
+
+
+# Espera as threads terminarem (não é necessário neste exemplo, mas pode ser útil em outros casos)
+game.join()
+chatbot.join()
+yolo.join()
+
+
