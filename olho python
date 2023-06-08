@@ -1,698 +1,179 @@
-import threading
+# Importar pygame
 import pygame
-import speech_recognition as sr
-import azure.cognitiveservices.speech as speechsdk
-import openai
-import os
-import random
-import time
-import keyboard
-import io
-import wave
-import subprocess
-import pygetwindow as gw
-import cv2
-import torch
-from PIL import Image
-import pyautogui
 
 
 
 
-def yolo_thread():
 
-    # Model
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)  # for PIL/cv2/np inputs and NMS
+# Inicializar pygame
+pygame.init()
 
-    # Webcam
-    cap = cv2.VideoCapture(0)
+# Definir o tamanho da janela
+WINDOW_WIDTH = 1920
+WINDOW_HEIGHT = 1090
 
-    # Criar uma janela redimensionável
-    cv2.namedWindow('YOLOv5', cv2.WINDOW_NORMAL)
+# Criar a janela
+screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN)
 
-    # Definir o modo de tela cheia
-    cv2.setWindowProperty('YOLOv5', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+# Carregar as imagens da pupila e do contorno do olho esquerdos
+pupila_esquerda = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_esquerda.png")
+contorno_esquerdo = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_esquerdo.png")
 
-    # Obter a largura e a altura da tela
-    screen_width, screen_height = pyautogui.size()
+# Alterar o tamanho das imagens para 50x50 pixels
+pupila_esquerda = pygame.transform.scale(pupila_esquerda, (400, 500))
+contorno_esquerdo = pygame.transform.scale(contorno_esquerdo, (1050, 1050))
 
-    # Calcular o centro da tela
-    screen_center_x = screen_width / 2
-    screen_center_y = screen_height / 2
+# Carregar as imagens da pupila e do contorno do olho direitos
+pupila_direita = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_direita.png")
+contorno_direito = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_direito.png")
 
-    # Mover o mouse para o centro da tela
-    pyautogui.moveTo(screen_center_x, screen_center_y)
+# Alterar o tamanho das imagens para 50x50 pixels
+pupila_direita = pygame.transform.scale(pupila_direita, (400, 500))
+contorno_direito = pygame.transform.scale(contorno_direito, (1050, 1050))
 
-    # Loop
-    while True:
-        # Ler um frame da webcam
-        ret, frame = cap.read()
+# Obter as posições das imagens
+pupila_esquerda_rect = pupila_esquerda.get_rect()
+contorno_esquerdo_rect = contorno_esquerdo.get_rect()
+pupila_direita_rect = pupila_direita.get_rect()
+contorno_direito_rect = contorno_direito.get_rect()
 
-        # Converter a imagem de BGR para RGB
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+# Centralizar as imagens na janela
+pupila_esquerda_rect.center = (400, 300)
+contorno_esquerdo_rect.center = (400, 300)
+pupila_direita_rect.center = (1520, 300)
+contorno_direito_rect.center = (1520, 300)
 
-        # Redimensionar a imagem da webcam para o mesmo tamanho da tela
-        img = cv2.resize(img, (screen_width, screen_height))
+# Definir os limites para a pupila esquerda
+min_x_esquerda = 200 # valor mínimo para x
+max_x_esquerda = 600 # valor máximo para x
+min_y_esquerda = 100 # valor mínimo para y
+max_y_esquerda = 500 # valor máximo para y
 
-        # Fazer inferência com o modelo
-        results = model(img)
+# Definir os limites para a pupila direita
+min_x_direita = 1320 # valor mínimo para x
+max_x_direita = 1720 # valor máximo para x
+min_y_direita = 100 # valor mínimo para y
+max_y_direita = 500 # valor máximo para y
 
-        # Mover o mouse para o centro do retângulo mais próximo
-        # Obter as coordenadas dos retângulos de detecção
-        boxes = results.xyxy[0]
+# Criar uma variável para guardar o estado da animação
+# 0 significa mostrar a imagem fixa
+# 1 significa mostrar a pasta de imagens em loop
+estado = 0
 
-        # Obter os nomes das classes das detecções
-        names = results.namesc
+# Carregar a imagem fixa
+imagem_fixa = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca standart\\boca.png")
 
-        # Tentar encontrar o retângulo de detecção mais próximo do centro da tela
-        try:
-            # Usar a função min com uma função lambda que calcula a distância entre o centro do retângulo e o centro da tela
-            closest_box = min(boxes, key=lambda box: ((box[0] + box[2]) / 2 - screen_center_x) ** 2 + ((box[1] + box[3]) / 2 - screen_center_y) ** 2)
+# Carregar as imagens da pasta em uma lista
+imagens_pasta = []
+imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\01.png"))
+imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\02.png"))
+imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\03.png"))
+# Adicione quantas imagens quiser na lista
 
-            # Obter as coordenadas do canto superior esquerdo e do canto inferior direito do retângulo mais próximo
-            x1, y1, x2, y2, conf, cls = closest_box
+# Criar uma variável para guardar o índice da lista de imagens
+indice_pasta = 0
 
-            # Calcular o centro do retângulo mais próximo
-            box_center_x = (x1 + x2) / 2
-            box_center_y = (y1 + y2) / 2
+# Criar uma variável para guardar o tempo da animação da pasta
+tempo_pasta = 0
 
-            # Mover o mouse para o centro do retângulo mais próximo
-            pyautogui.moveTo(box_center_x, box_center_y)
+# Criar uma variável para definir o tempo entre cada troca de imagem da pasta (em segundos)
+intervalo_pasta = 0.1
 
-            # Obter o nome da classe da detecção mais próxima
-            name = names[int(cls)]
+# Definir as coordenadas das imagens na tela
+x = -500 # valor arbitrário para x
+y = 500 # valor arbitrário para y
 
-            # Imprimir o nome da classe na tela
-            print(f"Mouse moved to {name}")
+# Criar uma variável para guardar o tempo do último frame
+ultimo_tempo = pygame.time.get_ticks()
 
-        # Se não houver nenhuma detecção, imprimir uma mensagem de erro
-        except ValueError:
-            print("No detection found")
+# Criar um loop principal
+running = True
+while running:
+    # Calcular o tempo do frame atual
+    tempo_atual = pygame.time.get_ticks()
 
-        # Renderizar os resultados na imagem
-        img = results.render()[0]
+    # Calcular a diferença entre o tempo atual e o último tempo
+    dt = (tempo_atual - ultimo_tempo) / 1000 # dividir por 1000 para converter de milissegundos para segundos
 
-        # Mostrar a imagem na janela
-        cv2.imshow('YOLOv5', img)
+    # Atualizar o último tempo com o tempo atual
+    ultimo_tempo = tempo_atual
 
-        # Esperar pela tecla ESC para sair do loop
-        if cv2.waitKey(1) == 27:
-            break
+    # Verificar os eventos
+    for event in pygame.event.get():
+        # Se o usuário fechou a janela
+        if event.type == pygame.QUIT:
+            running = False
+        # Se o mouse se moveu na janela
+        elif event.type == pygame.MOUSEMOTION:
+            # Obter a posição do mouse
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            # Mudar a posição das pupilas para seguir o mouse
+            # Verificar se a nova posição está dentro dos limites
+            novo_x_esquerda = mouse_x - 560
+            novo_y_esquerda = mouse_y - 240
+            novo_x_direita = mouse_x + 560
+            novo_y_direita = mouse_y - 240
 
-    # Liberar os recursos da webcam e fechar as janelas
-    cap.release()
-    cv2.destroyAllWindows()
+            if min_x_esquerda <= novo_x_esquerda <= max_x_esquerda: # se o novo x da pupila esquerda está dentro do intervalo permitido
+                pupila_esquerda_rect.centerx = novo_x_esquerda # atualizar o x da pupila esquerda
 
+            if min_y_esquerda <= novo_y_esquerda <= max_y_esquerda: # se o novo y da pupila esquerda está dentro do intervalo permitido
+                pupila_esquerda_rect.centery = novo_y_esquerda # atualizar o y da pupila esquerda
 
+            if min_x_direita <= novo_x_direita <= max_x_direita: # se o novo x da pupila direita está dentro do intervalo permitido
+                pupila_direita_rect.centerx = novo_x_direita # atualizar o x da pupila direita
 
-# Função que será executada na thread do jogoccccc
-def game_thread():
-    # Inicializar pygame
-    pygame.init()
-
-    # Definir o tamanho da janela
-    WINDOW_WIDTH = 1920
-    WINDOW_HEIGHT = 1090
-    # Criar a janela
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN)
-
-    # Carregar as imagens da pupila e do contorno do olho esquerdos
-    pupila_esquerda = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_esquerda.png")
-    contorno_esquerdo = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_esquerdo.png")
-
-    # Alterar o tamanho das imagens para 50x50 pixels
-    pupila_esquerda = pygame.transform.scale(pupila_esquerda, (400, 500))
-    contorno_esquerdo = pygame.transform.scale(contorno_esquerdo, (1050, 1050))
-
-    # Carregar as imagens da pupila e do contorno do olho direitos
-    pupila_direita = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_direita.png")
-    contorno_direito = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_direito.png")
-
-    # Alterar o tamanho das imagens para 50x50 pixels
-    pupila_direita = pygame.transform.scale(pupila_direita, (400, 500))
-    contorno_direito = pygame.transform.scale(contorno_direito, (1050, 1050))
-
-    # Obter as posições das imagens
-    pupila_esquerda_rect = pupila_esquerda.get_rect()
-    contorno_esquerdo_rect = contorno_esquerdo.get_rect()
-    pupila_direita_rect = pupila_direita.get_rect()
-    contorno_direito_rect = contorno_direito.get_rect()
-
-    # Centralizar as imagens na janela
-    pupila_esquerda_rect.center = (400, 300)
-    contorno_esquerdo_rect.center = (400, 300)
-    pupila_direita_rect.center = (1520, 300)
-    contorno_direito_rect.center = (1520, 300)
-
-    # Definir os limites para a pupila esquerda
-    min_x_esquerda = 200 # valor mínimo para x
-    max_x_esquerda = 600 # valor máximo para x
-    min_y_esquerda = 100 # valor mínimo para y
-    max_y_esquerda = 500 # valor máximo para y
-
-    # Definir os limites para a pupila direita
-    min_x_direita = 1320 # valor mínimo para x
-    max_x_direita = 1720 # valor máximo para x
-    min_y_direita = 100 # valor mínimo para y
-    max_y_direita = 500 # valor máximo para y
-
-    # Criar uma variável para guardar o estado da animação
-    # 0 significa mostrar a imagem fixa
-    # 1 significa mostrar a pasta de imagens em loop
-    estado = 0
-
-    # Carregar a imagem fixa
-    imagem_fixa = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca standart\\boca.png")
-
-    # Carregar as imagens da pasta em uma lista
-    imagens_pasta = []
-    imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\01.png"))
-    imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\02.png"))
-    imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\03.png"))
-    # Adicione quantas imagens quiser na lista
-
-    # Criar uma variável para guardar o índice da lista de imagens
-    indice_pasta = 0
-
-    # Criar uma variável para guardar o tempo da animação da pasta
-    tempo_pasta = 0
-
-    # Criar uma variável para definir o tempo entre cada troca de imagem da pasta (em segundos)
-    intervalo_pasta = 0.1
-
-    # Definir as coordenadas das imagens na tela
-    x = -500 # valor arbitrário para x
-    y = 500 # valor arbitrário para y
-
-    # Criar uma variável para guardar o tempo do último frame
-    ultimo_tempo = pygame.time.get_ticks()
-
-    # Criar um loop principal
-    running = True
-    while running:
-        # Calcular o tempo do frame atual
-        tempo_atual = pygame.time.get_ticks()
-
-        # Calcular a diferença entre o tempo atual e o último tempo
-        dt = (tempo_atual - ultimo_tempo) / 1000 # dividir por 1000 para converter de milissegundos para segundos
-
-        # Atualizar o último tempo com o tempo atual
-        ultimo_tempo = tempo_atual
-
-        # Verificar os eventos
-        for event in pygame.event.get():
-            # Se o usuário fechou a janela
-            if event.type == pygame.QUIT:
-                running = False
-            # Se o mouse se moveu na janela
-            elif event.type == pygame.MOUSEMOTION:
-                # Obter a posição do mouse
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                # Mudar a posição das pupilas para seguir o mouse
-                # Verificar se a nova posição está dentro dos limites
-                novo_x_esquerda = mouse_x - 560
-                novo_y_esquerda = mouse_y - 240
-                novo_x_direita = mouse_x + 560
-                novo_y_direita = mouse_y - 240
-
-                if min_x_esquerda <= novo_x_esquerda <= max_x_esquerda: # se o novo x da pupila esquerda está dentro do intervalo permitido
-                    pupila_esquerda_rect.centerx = novo_x_esquerda # atualizar o x da pupila esquerda
-
-                if min_y_esquerda <= novo_y_esquerda <= max_y_esquerda: # se o novo y da pupila esquerda está dentro do intervalo permitido
-                    pupila_esquerda_rect.centery = novo_y_esquerda # atualizar o y da pupila esquerda
-
-                if min_x_direita <= novo_x_direita <= max_x_direita: # se o novo x da pupila direita está dentro do intervalo permitido
-                    pupila_direita_rect.centerx = novo_x_direita # atualizar o x da pupila direita
-
-                if min_y_direita <= novo_y_direita <= max_y_direita: # se o novo y da pupila direita está dentro do intervalo permitido
-                    pupila_direita_rect.centery = novo_y_direita # atualizar o y da pupila direita
-            
-            # Verificar se a tecla "c" foi pressionada
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_c:
-                    # Se for, mudar o estado da animação
-                    if estado == 0: # se estava mostrando a imagem fixa
-                        estado = 1 # mudar para mostrar a pasta em loop
-                    else: # se estava mostrando a pasta em loop
-                        estado = 0 # mudar para mostrar a imagem fixa
+            if min_y_direita <= novo_y_direita <= max_y_direita: # se o novo y da pupila direita está dentro do intervalo permitido
+                pupila_direita_rect.centery = novo_y_direita # atualizar o y da pupila direita
         
-        # Preencher a tela com uma cor de fundo 
-        screen.fill((255,255,255))
-
-        # Desenhar os outros elementos na tela 
-        
-
-        screen.blit(pupila_esquerda, pupila_esquerda_rect)
-        screen.blit(contorno_esquerdo, contorno_esquerdo_rect)
-        screen.blit(pupila_direita, pupila_direita_rect)
-        screen.blit(contorno_direito, contorno_direito_rect)
-        
-        # Desenhar os outros elementos na tela 
-        # Coloque aqui o código para desenhar o fundo, as linhas, os textos e as outras imagens 
-
-        # Desenhar a imagem fixa na tela 
-        screen.blit(imagem_fixa, (x,y)) 
-
-        # Verificar qual é o estado da animação 
-        if estado == 1: 
-            # Incrementar o tempo da animação da pasta 
-            tempo_pasta += dt 
-
-            # Verificar se o tempo da animação é maior ou igual ao intervalo 
-            if tempo_pasta >= intervalo_pasta: 
-                # Se for, incrementar o índice da lista de imagens 
-                indice_pasta += 1 
-
-                # Se o índice for maior ou igual ao tamanho da lista de imagens, voltar ao início 
-                if indice_pasta >= len(imagens_pasta): 
-                    indice_pasta=0 
-
-                # Resetar o tempo da animação da pasta 
-                tempo_pasta=0 
-
-            # Desenhar a imagem correspondente ao índice da lista de imagens na tela 
-            screen.blit(imagens_pasta[indice_pasta],(x,y)) 
-
-        # Atualizar a tela
-        pygame.display.flip()
-
-    # Finalizar pygame
-    pygame.quit()
-
-
-
-
-
-
-
-
-
-    # Função para salvar o áudio sintetizado em um arquivo
-    def salvar_audio_sintetizado(filename, audio_data):
-        with open(filename, 'wb') as file:
-            file.write(audio_data)
-
-
-
-
-# Função que será executada na thread do chatbot
-chatbot_name = "Biel"
-
-
-
-
-directory = r"C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\audios"
-
-
-
-
-def chatbot_thread():
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # Substitua por sua própria chave de assinatura e região de serviço
-    speech_key, service_region = "b339aed4191a4f9d87898bcf8b548c0f", "brazilsouth"
-
-
-
-
-
-
-
-
-    # Crie uma instância de uma configuração de fala com chave de assinatura e região de serviço especificadas.
-    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
-
-
-
-
-
-
-
-
-    # Defina a voz do sintetizador de voz
-    speech_config.speech_synthesis_voice_name = 'pt-BR-LeticiaNeural'
-
-
-
-
-
-
-
-
-    # Initialize the API key
-    openai.api_key = "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"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def gerar_resposta(messages):
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            max_tokens=150,
-            temperature=1.5
-        )
-        return [response.choices[0].message.content, response.usage]
-
-
-
-
-
-
-
-
-    def ouvir_microfone():
-        r = sr.Recognizer()
-        with sr.Microphone() as source:
-            print("Diga alguma coisa...")
-            r.adjust_for_ambient_noise(source)  # ajuste de ruído do microfone
-            audio = r.listen(source)  # escuta o microfone
-        try:
-            print("Você disse: " + r.recognize_google(audio, language='pt-BR'))
-            return r.recognize_google(audio, language='pt-BR')
-        except sr.UnknownValueError:
-            print("Não entendi o que você disse")
-        # Pressione a tecla "c" antes de falar
-            keyboard.press_and_release('c')
-           
-            text = "Não entendi o que você disse. Poderia repetir novamente?"
-
-
-
-
-
-
-
-
-            # Use SSML para ajustar o tom de voz
-            ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
-
-
-
-
-
-
-
-
-            speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
-            result = speech_synthesizer.speak_ssml_async(ssml).get()
-                # Simule o pressionamento da tecla "c" usando o PyAutoGUI
-            keyboard.press_and_release('c')
-       
-        except sr.RequestError as e:
-            print("Não foi possível obter resultados; {0}".format(e))
-        return ouvir_microfone()  # Chama a função novamente se ocorreu um erro
-
-
-
-
-
-
-
-
-    mensagens = [{"role": "system", "content": "Você é um assistente gente boa."}]
-
-
-
-
-
-
-
-
-    while True:
-        # Ask a question
-        question = ouvir_microfone()
-
-
-
-
-
-
-
-
-        if question == "sair" or question == "":
-            print("saindo")
-            # Pressione a tecla "c" antes de falar
-            keyboard.press_and_release('c')
-           
-            text = "OK. Irei me desativar agora"
-
-
-
-
-
-
-
-
-            # Use SSML para ajustar o tom de voz
-            ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
-
-
-
-
-
-
-
-
-            speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
-            result = speech_synthesizer.speak_ssml_async(ssml).get()
-                # Simule o pressionamento da tecla "c" usando o PyAutoGUI
-            keyboard.press_and_release('c')
-           
-            break
-       
-        else:
-            # Verificar se existe um arquivo de áudio correspondente à pergunta
-            clean_question = "".join(c if c.isalnum() else "_" for c in question)
-            audio_file = os.path.join(directory, f"{clean_question}.wav")
-
-
-            if os.path.exists(audio_file):
-                # Pressione a tecla "c" antes de falar
-                keyboard.press_and_release('c')
-
-
-                pygame.mixer.music.load(audio_file)  # Carregar o arquivo de áudio
-                pygame.mixer.music.play()  # Reproduzir o áudio
-
-
-                # Aguardar a reprodução do áudio terminar
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
-
-
-                # Pressione a tecla "c" após o áudio terminar
-                keyboard.press_and_release('c')
-           
-            else:
-                mensagens.append({"role": "user", "content": str(question)})
-
-
-
-
-
-
-
-
-                text = ""
-                if "qual é o seu nome" in question.lower() or "seu nome" in question.lower():
-                    print("Pergunta:", question.lower())
-                    print("Perguntou meu nome!")
-                    mensagens.append({"role": "assistant", "content": f"Meu nome é Gabriel Junior. Mas pode me chamar de {chatbot_name}"})
-                    text = f"Meu nome é Gabrielzinho. Mas pode me chamar de {chatbot_name}"
-
-
-
-
-
-
-
-
-                    # Pressione a tecla "c" antes de falar
-                    keyboard.press_and_release('c')
-
-
-
-
-
-
-
-
-                    # Use SSML para ajustar o tom de voz
-                    ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
-
-
-
-
-
-
-
-
-                    speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
-                    result = speech_synthesizer.speak_ssml_async(ssml).get()
-
-
-
-
-
-
-
-
-                    # Simule o pressionamento da tecla "c" usando o PyAutoGUI
-                    keyboard.press_and_release('c')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                else:
-                    answer = gerar_resposta(mensagens)
-                    print("Nóis:", question)
-                    print("ChatGPT:", answer[0], "\nCusto:\n", answer[1])
-                    mensagens.append({"role": "assistant", "content": answer[0]})
-                    text = answer[0]
-   
-                    # Limpar o texto para usar como nome do arquivo
-                    clean_text = "".join(c if c.isalnum() else "_" for c in question)
-                    filename = os.path.join(directory, f"{clean_text}.wav")
-
-
-
-
-                    # Pressione a tecla "c" antes de falar
-                    keyboard.press_and_release('c')
-
-
-
-
-                    # Use SSML para ajustar o tom de voz
-                    ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR"><voice name="{speech_config.speech_synthesis_voice_name}"><prosody pitch="-1.2st">{text}</prosody></voice></speak>'
-
-
-
-
-                    speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
-                    result = speech_synthesizer.speak_ssml_async(ssml).get()
-                    audio_data = result.audio_data
-
-
-
-
-                    # Salvar o áudio com o nome do texto captado em um diretório específico
-                    with wave.open(filename, 'wb') as wave_file:
-                        wave_file.setnchannels(1)
-                        wave_file.setsampwidth(2)
-                        wave_file.setframerate(16000)
-                        wave_file.writeframes(audio_data)
-
-
-
-
-                        print(f"Áudio salvo como '{filename}'")
-
-
-
-
-                        # Simule o pressionamento da tecla "c" usando o PyAutoGUI
-                        keyboard.press_and_release('c')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            debugar = False
-            if debugar:
-                print("Mensagens", mensagens, type(mensagens))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Cria as threads
-game = threading.Thread(target=game_thread)
-chatbot = threading.Thread(target=chatbot_thread)
-yolo = threading.Thread(target=yolo_thread)
-
-
-
-
-
-
-
-
-# Inicia as threads
-game.start()
-chatbot.start()
-yolo.start()
-
-
-
-
-
-
-
-# Espera as threads terminarem (não é necessário neste exemplo, mas pode ser útil em outros casos)
-game.join()
-chatbot.join()
-yolo.join()
-
-
+        # Verificar se a tecla "c" foi pressionada
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_c:
+                # Se for, mudar o estado da animação
+                if estado == 0: # se estava mostrando a imagem fixa
+                    estado = 1 # mudar para mostrar a pasta em loop
+                else: # se estava mostrando a pasta em loop
+                    estado = 0 # mudar para mostrar a imagem fixa
+    
+    # Preencher a tela com uma cor de fundo 
+    screen.fill((255,255,255))
+
+    # Desenhar os outros elementos na tela 
+    
+
+    screen.blit(pupila_esquerda, pupila_esquerda_rect)
+    screen.blit(contorno_esquerdo, contorno_esquerdo_rect)
+    screen.blit(pupila_direita, pupila_direita_rect)
+    screen.blit(contorno_direito, contorno_direito_rect)
+    
+    # Desenhar os outros elementos na tela 
+    # Coloque aqui o código para desenhar o fundo, as linhas, os textos e as outras imagens 
+
+    # Desenhar a imagem fixa na tela 
+    screen.blit(imagem_fixa, (x,y)) 
+
+    # Verificar qual é o estado da animação 
+    if estado == 1: 
+        # Incrementar o tempo da animação da pasta 
+        tempo_pasta += dt 
+
+        # Verificar se o tempo da animação é maior ou igual ao intervalo 
+        if tempo_pasta >= intervalo_pasta: 
+            # Se for, incrementar o índice da lista de imagens 
+            indice_pasta += 1 
+
+            # Se o índice for maior ou igual ao tamanho da lista de imagens, voltar ao início 
+            if indice_pasta >= len(imagens_pasta): 
+                indice_pasta=0 
+
+            # Resetar o tempo da animação da pasta 
+            tempo_pasta=0 
+
+        # Desenhar a imagem correspondente ao índice da lista de imagens na tela 
+        screen.blit(imagens_pasta[indice_pasta],(x,y)) 
+
+    # Atualizar a tela
+    pygame.display.flip()
+
+# Finalizar pygame
+pygame.quit()
