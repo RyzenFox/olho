@@ -1,179 +1,280 @@
-# Importar pygame
-import pygame
+import cv2
+import torch
+from PIL import Image
+import pyautogui
+import threading
 
+# Definir a função que executa o código da webcam
+def webcam():
+  # Model
+  model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)  # for PIL/cv2/np inputs and NMS
 
+  # Webcam
+  cap = cv2.VideoCapture(0)
 
+  # Criar uma janela redimensionável
+  cv2.namedWindow('YOLOv5', cv2.WINDOW_NORMAL)
 
+  # Definir o modo de tela cheia
+  cv2.setWindowProperty('YOLOv5', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-# Inicializar pygame
-pygame.init()
+  # Obter a largura e a altura da tela
+  screen_width, screen_height = pyautogui.size()
 
-# Definir o tamanho da janela
-WINDOW_WIDTH = 1920
-WINDOW_HEIGHT = 1090
+  # Calcular o centro da tela
+  screen_center_x = screen_width / 2
+  screen_center_y = screen_height / 2
 
-# Criar a janela
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN)
+  # Mover o mouse para o centro da tela
+  pyautogui.moveTo(screen_center_x, screen_center_y)
 
-# Carregar as imagens da pupila e do contorno do olho esquerdos
-pupila_esquerda = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_esquerda.png")
-contorno_esquerdo = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_esquerdo.png")
+  # Loop
+  while True:
+    # Ler um frame da webcam
+    ret, frame = cap.read()
 
-# Alterar o tamanho das imagens para 50x50 pixels
-pupila_esquerda = pygame.transform.scale(pupila_esquerda, (400, 500))
-contorno_esquerdo = pygame.transform.scale(contorno_esquerdo, (1050, 1050))
+    # Converter a imagem de BGR para RGB
+    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-# Carregar as imagens da pupila e do contorno do olho direitos
-pupila_direita = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_direita.png")
-contorno_direito = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_direito.png")
+    # Redimensionar a imagem da webcam para o mesmo tamanho da tela
+    img = cv2.resize(img, (screen_width, screen_height))
 
-# Alterar o tamanho das imagens para 50x50 pixels
-pupila_direita = pygame.transform.scale(pupila_direita, (400, 500))
-contorno_direito = pygame.transform.scale(contorno_direito, (1050, 1050))
+    # Fazer inferência com o modelo
+    results = model(img)
 
-# Obter as posições das imagens
-pupila_esquerda_rect = pupila_esquerda.get_rect()
-contorno_esquerdo_rect = contorno_esquerdo.get_rect()
-pupila_direita_rect = pupila_direita.get_rect()
-contorno_direito_rect = contorno_direito.get_rect()
+    # Mover o mouse para o centro do retângulo mais próximo
+    # Obter as coordenadas dos retângulos de detecção
+    boxes = results.xyxy[0]
 
-# Centralizar as imagens na janela
-pupila_esquerda_rect.center = (400, 300)
-contorno_esquerdo_rect.center = (400, 300)
-pupila_direita_rect.center = (1520, 300)
-contorno_direito_rect.center = (1520, 300)
+    # Obter os nomes das classes das detecções
+    names = results.names
 
-# Definir os limites para a pupila esquerda
-min_x_esquerda = 200 # valor mínimo para x
-max_x_esquerda = 600 # valor máximo para x
-min_y_esquerda = 100 # valor mínimo para y
-max_y_esquerda = 500 # valor máximo para y
+    # Tentar encontrar o retângulo de detecção mais próximo do centro da tela
+    try:
+      # Usar a função min com uma função lambda que calcula a distância entre o centro do retângulo e o centro da tela
+      closest_box = min(boxes, key=lambda box: ((box[0] + box[2]) / 2 - screen_center_x) ** 2 + ((box[1] + box[3]) / 2 - screen_center_y) ** 2)
 
-# Definir os limites para a pupila direita
-min_x_direita = 1320 # valor mínimo para x
-max_x_direita = 1720 # valor máximo para x
-min_y_direita = 100 # valor mínimo para y
-max_y_direita = 500 # valor máximo para y
+      # Obter as coordenadas do canto superior esquerdo e do canto inferior direito do retângulo mais próximo
+      x1, y1, x2, y2, conf, cls = closest_box
 
-# Criar uma variável para guardar o estado da animação
-# 0 significa mostrar a imagem fixa
-# 1 significa mostrar a pasta de imagens em loop
-estado = 0
+      # Calcular o centro do retângulo mais próximo
+      box_center_x = (x1 + x2) / 2
+      box_center_y = (y1 + y2) / 2
 
-# Carregar a imagem fixa
-imagem_fixa = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca standart\\boca.png")
+      # Mover o mouse para o centro do retângulo mais próximo
+      pyautogui.moveTo(box_center_x, box_center_y)
 
-# Carregar as imagens da pasta em uma lista
-imagens_pasta = []
-imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\01.png"))
-imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\02.png"))
-imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\03.png"))
-# Adicione quantas imagens quiser na lista
+      # Obter o nome da classe da detecção mais próxima
+      name = names[int(cls)]
 
-# Criar uma variável para guardar o índice da lista de imagens
-indice_pasta = 0
+      # Imprimir o nome da classe na tela
+      print(f"Mouse moved to {name}")
 
-# Criar uma variável para guardar o tempo da animação da pasta
-tempo_pasta = 0
+    # Se não houver nenhuma detecção, imprimir uma mensagem de erro
+    except ValueError:
+      print("No detection found")
 
-# Criar uma variável para definir o tempo entre cada troca de imagem da pasta (em segundos)
-intervalo_pasta = 0.1
+    # Renderizar os resultados na imagem
+    img = results.render()[0]
 
-# Definir as coordenadas das imagens na tela
-x = -500 # valor arbitrário para x
-y = 500 # valor arbitrário para y
+    # Mostrar a imagem na janela
+    cv2.imshow('YOLOv5', img)
 
-# Criar uma variável para guardar o tempo do último frame
-ultimo_tempo = pygame.time.get_ticks()
+    # Esperar pela tecla ESC para sair do loop
+    if cv2.waitKey(1) == 27:
+      break
 
-# Criar um loop principal
-running = True
-while running:
-    # Calcular o tempo do frame atual
-    tempo_atual = pygame.time.get_ticks()
+  # Liberar os recursos da webcam e fechar as janelas
+  cap.release()
+  cv2.destroyAllWindows()
 
-    # Calcular a diferença entre o tempo atual e o último tempo
-    dt = (tempo_atual - ultimo_tempo) / 1000 # dividir por 1000 para converter de milissegundos para segundos
+# Definir a função que executa o código do pygame 
+def pygame():
 
-    # Atualizar o último tempo com o tempo atual
-    ultimo_tempo = tempo_atual
+    # Inicializar pygame
+    pygame.init()
 
-    # Verificar os eventos
-    for event in pygame.event.get():
-        # Se o usuário fechou a janela
-        if event.type == pygame.QUIT:
-            running = False
-        # Se o mouse se moveu na janela
-        elif event.type == pygame.MOUSEMOTION:
-            # Obter a posição do mouse
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            # Mudar a posição das pupilas para seguir o mouse
-            # Verificar se a nova posição está dentro dos limites
-            novo_x_esquerda = mouse_x - 560
-            novo_y_esquerda = mouse_y - 240
-            novo_x_direita = mouse_x + 560
-            novo_y_direita = mouse_y - 240
+    # Definir o tamanho da janela
+    WINDOW_WIDTH = 1920
+    WINDOW_HEIGHT = 1090
+    # Criar a janela
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN)
 
-            if min_x_esquerda <= novo_x_esquerda <= max_x_esquerda: # se o novo x da pupila esquerda está dentro do intervalo permitido
-                pupila_esquerda_rect.centerx = novo_x_esquerda # atualizar o x da pupila esquerda
+    # Carregar as imagens da pupila e do contorno do olho esquerdos
+    pupila_esquerda = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_esquerda.png")
+    contorno_esquerdo = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_esquerdo.png")
 
-            if min_y_esquerda <= novo_y_esquerda <= max_y_esquerda: # se o novo y da pupila esquerda está dentro do intervalo permitido
-                pupila_esquerda_rect.centery = novo_y_esquerda # atualizar o y da pupila esquerda
+    # Alterar o tamanho das imagens para 50x50 pixels
+    pupila_esquerda = pygame.transform.scale(pupila_esquerda, (400, 500))
+    contorno_esquerdo = pygame.transform.scale(contorno_esquerdo, (1050, 1050))
 
-            if min_x_direita <= novo_x_direita <= max_x_direita: # se o novo x da pupila direita está dentro do intervalo permitido
-                pupila_direita_rect.centerx = novo_x_direita # atualizar o x da pupila direita
+    # Carregar as imagens da pupila e do contorno do olho direitos
+    pupila_direita = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\pupila_direita.png")
+    contorno_direito = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\olho\\contorno_direito.png")
 
-            if min_y_direita <= novo_y_direita <= max_y_direita: # se o novo y da pupila direita está dentro do intervalo permitido
-                pupila_direita_rect.centery = novo_y_direita # atualizar o y da pupila direita
+    # Alterar o tamanho das imagens para 50x50 pixels
+    pupila_direita = pygame.transform.scale(pupila_direita, (400, 500))
+    contorno_direito = pygame.transform.scale(contorno_direito, (1050, 1050))
+
+    # Obter as posições das imagens
+    pupila_esquerda_rect = pupila_esquerda.get_rect()
+    contorno_esquerdo_rect = contorno_esquerdo.get_rect()
+    pupila_direita_rect = pupila_direita.get_rect()
+    contorno_direito_rect = contorno_direito.get_rect()
+
+    # Centralizar as imagens na janela
+    pupila_esquerda_rect.center = (400, 300)
+    contorno_esquerdo_rect.center = (400, 300)
+    pupila_direita_rect.center = (1520, 300)
+    contorno_direito_rect.center = (1520, 300)
+
+    # Definir os limites para a pupila esquerda
+    min_x_esquerda = 200 # valor mínimo para x
+    max_x_esquerda = 600 # valor máximo para x
+    min_y_esquerda = 100 # valor mínimo para y
+    max_y_esquerda = 500 # valor máximo para y
+
+    # Definir os limites para a pupila direita
+    min_x_direita = 1320 # valor mínimo para x
+    max_x_direita = 1720 # valor máximo para x
+    min_y_direita = 100 # valor mínimo para y
+    max_y_direita = 500 # valor máximo para y
+
+    # Criar uma variável para guardar o estado da animação
+    # 0 significa mostrar a imagem fixa
+    # 1 significa mostrar a pasta de imagens em loop
+    estado = 0
+
+    # Carregar a imagem fixa
+    imagem_fixa = pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca standart\\boca.png")
+
+    # Carregar as imagens da pasta em uma lista
+    imagens_pasta = []
+    imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\01.png"))
+    imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\02.png"))
+    imagens_pasta.append(pygame.image.load("C:\\Users\\gabri\\OneDrive\\Documentos\\IA\\boca\\boca animada\\03.png"))
+    # Adicione quantas imagens quiser na lista
+
+    # Criar uma variável para guardar o índice da lista de imagens
+    indice_pasta = 0
+
+    # Criar uma variável para guardar o tempo da animação da pasta
+    tempo_pasta = 0
+
+    # Criar uma variável para definir o tempo entre cada troca de imagem da pasta (em segundos)
+    intervalo_pasta = 0.1
+
+    # Definir as coordenadas das imagens na tela
+    x = -500 # valor arbitrário para x
+    y = 500 # valor arbitrário para y
+
+    # Criar uma variável para guardar o tempo do último frame
+    ultimo_tempo = pygame.time.get_ticks()
+
+    # Criar um loop principal
+    running = True
+    while running:
+        # Calcular o tempo do frame atual
+        tempo_atual = pygame.time.get_ticks()
+
+        # Calcular a diferença entre o tempo atual e o último tempo
+        dt = (tempo_atual - ultimo_tempo) / 1000 # dividir por 1000 para converter de milissegundos para segundos
+
+        # Atualizar o último tempo com o tempo atual
+        ultimo_tempo = tempo_atual
+
+        # Verificar os eventos
+        for event in pygame.event.get():
+            # Se o usuário fechou a janela
+            if event.type == pygame.QUIT:
+                running = False
+            # Se o mouse se moveu na janela
+            elif event.type == pygame.MOUSEMOTION:
+                # Obter a posição do mouse
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                # Mudar a posição das pupilas para seguir o mouse
+                # Verificar se a nova posição está dentro dos limites
+                novo_x_esquerda = mouse_x - 560
+                novo_y_esquerda = mouse_y - 240
+                novo_x_direita = mouse_x + 560
+                novo_y_direita = mouse_y - 240
+
+                if min_x_esquerda <= novo_x_esquerda <= max_x_esquerda: # se o novo x da pupila esquerda está dentro do intervalo permitido
+                    pupila_esquerda_rect.centerx = novo_x_esquerda # atualizar o x da pupila esquerda
+
+                if min_y_esquerda <= novo_y_esquerda <= max_y_esquerda: # se o novo y da pupila esquerda está dentro do intervalo permitido
+                    pupila_esquerda_rect.centery = novo_y_esquerda # atualizar o y da pupila esquerda
+
+                if min_x_direita <= novo_x_direita <= max_x_direita: # se o novo x da pupila direita está dentro do intervalo permitido
+                    pupila_direita_rect.centerx = novo_x_direita # atualizar o x da pupila direita
+
+                if min_y_direita <= novo_y_direita <= max_y_direita: # se o novo y da pupila direita está dentro do intervalo permitido
+                    pupila_direita_rect.centery = novo_y_direita # atualizar o y da pupila direita
+            
+            # Verificar se a tecla "c" foi pressionada
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_c:
+                    # Se for, mudar o estado da animação
+                    if estado == 0: # se estava mostrando a imagem fixa
+                        estado = 1 # mudar para mostrar a pasta em loop
+                    else: # se estava mostrando a pasta em loop
+                        estado = 0 # mudar para mostrar a imagem fixa
         
-        # Verificar se a tecla "c" foi pressionada
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_c:
-                # Se for, mudar o estado da animação
-                if estado == 0: # se estava mostrando a imagem fixa
-                    estado = 1 # mudar para mostrar a pasta em loop
-                else: # se estava mostrando a pasta em loop
-                    estado = 0 # mudar para mostrar a imagem fixa
-    
-    # Preencher a tela com uma cor de fundo 
-    screen.fill((255,255,255))
+        # Preencher a tela com uma cor de fundo 
+        screen.fill((255,255,255))
 
-    # Desenhar os outros elementos na tela 
-    
+        # Desenhar os outros elementos na tela 
+        
 
-    screen.blit(pupila_esquerda, pupila_esquerda_rect)
-    screen.blit(contorno_esquerdo, contorno_esquerdo_rect)
-    screen.blit(pupila_direita, pupila_direita_rect)
-    screen.blit(contorno_direito, contorno_direito_rect)
-    
-    # Desenhar os outros elementos na tela 
-    # Coloque aqui o código para desenhar o fundo, as linhas, os textos e as outras imagens 
+        screen.blit(pupila_esquerda, pupila_esquerda_rect)
+        screen.blit(contorno_esquerdo, contorno_esquerdo_rect)
+        screen.blit(pupila_direita, pupila_direita_rect)
+        screen.blit(contorno_direito, contorno_direito_rect)
+        
+        # Desenhar os outros elementos na tela 
+        # Coloque aqui o código para desenhar o fundo, as linhas, os textos e as outras imagens 
 
-    # Desenhar a imagem fixa na tela 
-    screen.blit(imagem_fixa, (x,y)) 
+        # Desenhar a imagem fixa na tela 
+        screen.blit(imagem_fixa, (x,y)) 
 
-    # Verificar qual é o estado da animação 
-    if estado == 1: 
-        # Incrementar o tempo da animação da pasta 
-        tempo_pasta += dt 
+        # Verificar qual é o estado da animação 
+        if estado == 1: 
+            # Incrementar o tempo da animação da pasta 
+            tempo_pasta += dt 
 
-        # Verificar se o tempo da animação é maior ou igual ao intervalo 
-        if tempo_pasta >= intervalo_pasta: 
-            # Se for, incrementar o índice da lista de imagens 
-            indice_pasta += 1 
+            # Verificar se o tempo da animação é maior ou igual ao intervalo 
+            if tempo_pasta >= intervalo_pasta: 
+                # Se for, incrementar o índice da lista de imagens 
+                indice_pasta += 1 
 
-            # Se o índice for maior ou igual ao tamanho da lista de imagens, voltar ao início 
-            if indice_pasta >= len(imagens_pasta): 
-                indice_pasta=0 
+                # Se o índice for maior ou igual ao tamanho da lista de imagens, voltar ao início 
+                if indice_pasta >= len(imagens_pasta): 
+                    indice_pasta=0 
 
-            # Resetar o tempo da animação da pasta 
-            tempo_pasta=0 
+                # Resetar o tempo da animação da pasta 
+                tempo_pasta=0 
 
-        # Desenhar a imagem correspondente ao índice da lista de imagens na tela 
-        screen.blit(imagens_pasta[indice_pasta],(x,y)) 
+            # Desenhar a imagem correspondente ao índice da lista de imagens na tela 
+            screen.blit(imagens_pasta[indice_pasta],(x,y)) 
 
-    # Atualizar a tela
-    pygame.display.flip()
+        # Atualizar a tela
+        pygame.display.flip()
 
-# Finalizar pygame
-pygame.quit()
+    # Finalizar pygame
+    pygame.quit()
+
+
+
+
+
+
+
+# Criar uma thread que executa a função webcam
+webcam_thread = threading.Thread(target=webcam, name='webcam_thread')
+
+# Criar uma thread que executa a função pygame 
+pygame_thread = threading.Thread(target=pygame, name='pygame_thread')
+
+# Iniciar as threads 
+webcam_thread.start()
+pygame_thread.start()
